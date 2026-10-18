@@ -1223,6 +1223,13 @@ mod tests {
     }
 
     #[test]
+    fn test_lex_empty_input() {
+        let mut lexer = Lexer::new("");
+        let tokens = lexer.tokenize();
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].kind, TokenTypeBase::Eof);
+    }
+
     #[test]
     fn test_is_keyword_distinguishes_reserved_words() {
         let across = Lexer::new("across").tokenize();
@@ -1234,11 +1241,17 @@ mod tests {
         assert!(!eq[0].kind.is_keyword());
     }
 
-    fn test_lex_empty_input() {
-        let mut lexer = Lexer::new("");
-        let tokens = lexer.tokenize();
-        assert_eq!(tokens.len(), 1);
-        assert_eq!(tokens[0].kind, TokenTypeBase::Eof);
+    #[test]
+    fn test_is_keyword_covers_every_keywords_map_entry() {
+        // is_keyword mirrors KEYWORDS by hand; this catches a new map entry that
+        // never got added to the match.
+        for (word, _) in KEYWORDS.iter() {
+            let tokens = Lexer::new(word).tokenize();
+            assert!(
+                tokens[0].kind.is_keyword(),
+                "KEYWORDS entry `{word}` must report is_keyword()"
+            );
+        }
     }
 
     #[test]

@@ -17,9 +17,9 @@ impl<'a> Parser<'a> {
         let token = self.advance();
         match &token.kind {
             TokenType::Identifier(s) => Ok(s.to_string()),
-            // `transfer` names the built-in that moves values between memories; it is also
-            // accepted as an identifier so `impl Transfer for ...` and calls can parse.
-            TokenType::Transfer => Ok("transfer".to_string()),
+            // Keywords (including `transfer`) cannot bind a name. Capital `Transfer` for
+            // `impl Transfer<...>` is an Identifier, so it still parses; the `transfer(...)`
+            // call form is handled in the expression parser, not here.
             other if other.is_keyword() => Err(self.error_at(
                 token,
                 &format!("`{}` is a keyword and cannot be used as a name", other),
@@ -1915,17 +1915,70 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
     }
 
     #[test]
-    fn test_keyword_as_let_name_names_the_keyword() {
-        let input = "fn main() -> i32 { let mut across = 3; return across; }";
-        let tokens = crate::lexer::Lexer::new(input).tokenize();
-        let mut parser = Parser::new(&tokens, input);
-        let err = parser
+    fn test_transfer_rejected_as_let_and_for_name() {
+        // `transfer` used to parse as a binding and only fail later at a call site
+        // (`Expected '(' after transfer`). let/for must refuse it like other keywords.
+        let cases = [
+            "fn main() -> i32 { let transfer = 3; return 0; }",
+            "fn main() -> i32 { for transfer in 0..3 { } return 0; }",
+        ];
+        for input in cases {
+            let tokens = crate::lexer::Lexer::new(input).tokenize();
+            let mut parser = Parser::new(&tokens, input);
+            let err = parser
+                .parse_function()
+                .expect_err("transfer as a binding name should fail");
+            let msg = err.format(input);
+            assert!(
+                msg.contains("`transfer` is a keyword and cannot be used as a name"),
+                "message was: {msg}"
+            );
+            assert!(
+                !msg.contains("Expected '(' after transfer"),
+                "must not fall through to the call-site error: {msg}"
+            );
+        }
+        // Point at `transfer` itself for the let case (col 24), not at `=`.
+        let let_input = cases[0];
+        let tokens = crate::lexer::Lexer::new(let_input).tokenize();
+        let mut parser = Parser::new(&tokens, let_input);
+        let msg = parser.parse_function().unwrap_err().format(let_input);
+        assert!(
+            msg.contains("Error at 1:24:"),
+            "expected span on transfer, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_keyword_rejected_as_for_and_fn_name() {
+        // FileCheck on parser_keyword_as_name.vx stops at the first error (let);
+        // these keep for/fn coverage in the unit suite.
+        let for_input = "fn main() -> i32 { for across in 0..3 { } return 0; }";
+        let tokens = crate::lexer::Lexer::new(for_input).tokenize();
+        let mut parser = Parser::new(&tokens, for_input);
+        let msg = parser
             .parse_function()
-            .expect_err("keyword as name should fail");
-        let msg = err.format(input);
+            .expect_err("for across should fail")
+            .format(for_input);
         assert!(
             msg.contains("`across` is a keyword and cannot be used as a name"),
             "message was: {msg}"
+        );
+
+        let fn_input = "fn across() -> i32 { return 0; }";
+        let tokens = crate::lexer::Lexer::new(fn_input).tokenize();
+        let mut parser = Parser::new(&tokens, fn_input);
+        let msg = parser
+            .parse_function()
+            .expect_err("fn across should fail")
+            .format(fn_input);
+        assert!(
+            msg.contains("`across` is a keyword and cannot be used as a name"),
+            "message was: {msg}"
+        );
+        assert!(
+            msg.contains("Error at 1:4:"),
+            "expected span on across, got: {msg}"
         );
     }
 
