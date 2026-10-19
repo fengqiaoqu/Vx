@@ -267,6 +267,7 @@ impl<S, C> TokenTypeBase<S, C> {
                 | TokenTypeBase::Unsafe
                 | TokenTypeBase::Safe
                 | TokenTypeBase::Extern
+                | TokenTypeBase::Pub
                 | TokenTypeBase::Trait
                 | TokenTypeBase::TypeKw
                 | TokenTypeBase::Impl
@@ -1245,7 +1246,7 @@ mod tests {
     fn test_is_keyword_covers_every_keywords_map_entry() {
         // is_keyword mirrors KEYWORDS by hand; this catches a new map entry that
         // never got added to the match.
-        for (word, _) in KEYWORDS.iter() {
+        for word in KEYWORDS.keys() {
             let tokens = Lexer::new(word).tokenize();
             assert!(
                 tokens[0].kind.is_keyword(),
