@@ -333,7 +333,6 @@ Dereferencing a raw pointer, indexing through one, reading a field through one, 
 dereferences it should be declared `unsafe fn`, so the obligation is visible in its signature
 rather than buried in its body. Marking a function `unsafe` does not allow raw pointer operations
 in its body. Each one still needs an `unsafe` block, as in [Unsafe and FFI](unsafe-and-ffi.md).
-The rule is not yet checked in a generic `unsafe fn`.
 
 `extern "C"` blocks declare foreign functions. Vx's C ABI interop is zero-overhead: there is no
 marshalling layer.
