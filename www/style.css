@@ -469,6 +469,20 @@ footer > p {
   position: relative;
 }
 
+/* Heading text is itself the permalink (no glyph). Inherit the accent; underline on hover
+ * so a reader can see it is a link without a permanent decoration.
+ */
+.post h2 a,
+.post h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+.post h2 a:hover,
+.post h3 a:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
 .post h2::before {
   content: "";
   position: absolute;
