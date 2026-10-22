@@ -29,7 +29,13 @@ runs:
       shell: bash
       run: |
         install="$GITHUB_WORKSPACE/toolchain/install"
-        enzyme=$(ls "$install"/lib/enzyme/LLVMEnzyme-22.*)
+        # Same empty-result guard as scripts/provision/install_enzyme.sh: an unset
+        # ENZYME_LIB fails autodiff jobs later with a confusing missing-.so error.
+        enzyme=$(ls "$install"/lib/enzyme/LLVMEnzyme-22.* 2>/dev/null | head -n 1)
+        if [ -z "$enzyme" ]; then
+          echo "Error: Could not find Enzyme library under $install/lib/enzyme" >&2
+          exit 1
+        fi
         echo "$install/bin" >> "$GITHUB_PATH"
         {
           echo "MLIR_SYS_220_PREFIX=$install"
