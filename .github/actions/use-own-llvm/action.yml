@@ -29,13 +29,15 @@ runs:
       shell: bash
       run: |
         install="$GITHUB_WORKSPACE/toolchain/install"
-        # Same empty-result guard as scripts/provision/install_enzyme.sh: an unset
-        # ENZYME_LIB fails autodiff jobs later with a confusing missing-.so error.
-        enzyme=$(ls "$install"/lib/enzyme/LLVMEnzyme-22.* 2>/dev/null | head -n 1)
-        if [ -z "$enzyme" ]; then
-          echo "Error: Could not find Enzyme library under $install/lib/enzyme" >&2
+        # Glob without ls so a missing file prints a clear message under -eo pipefail.
+        # (ls | head fails before the guard, and 2>/dev/null hides the ls error.)
+        shopt -s nullglob
+        matches=("$install"/lib/enzyme/LLVMEnzyme-22.*)
+        if [ ${#matches[@]} -eq 0 ]; then
+          echo "Error: no LLVMEnzyme-22 library under $install/lib/enzyme" >&2
           exit 1
         fi
+        enzyme=${matches[0]}
         echo "$install/bin" >> "$GITHUB_PATH"
         {
           echo "MLIR_SYS_220_PREFIX=$install"
