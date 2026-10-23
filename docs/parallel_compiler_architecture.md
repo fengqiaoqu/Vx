@@ -1070,8 +1070,8 @@ This section cross-references the design above to the actual sources, with an ho
 implementation status, so the architecture can be cited precisely (papers, reviews). Sections 1–8
 describe the *target* architecture; parts of it are fully implemented, parts are scaffolding whose
 data flow is not yet connected. This map states which is which. The narrative log of closing these
-gaps (what/why/tests, per commit) is tracked in the issues linked from the
-status table below.
+gaps (what/why/tests, per commit) lived in
+`discussions/parallel_pipeline_convergence.md` (no longer in the tree; see git history).
 
 ### 9.1 Design decisions & rationale
 
