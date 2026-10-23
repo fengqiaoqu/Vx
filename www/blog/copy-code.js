@@ -5,6 +5,13 @@
     return (code || pre).textContent;
   }
 
+  function flash(btn, label) {
+    btn.textContent = label;
+    setTimeout(function () {
+      btn.textContent = "Copy";
+    }, 1600);
+  }
+
   function enhance(pre) {
     if (pre.closest(".code-block")) return;
     var wrap = document.createElement("div");
@@ -20,14 +27,17 @@
     btn.addEventListener("click", function () {
       var text = plainText(pre);
       if (!navigator.clipboard || !navigator.clipboard.writeText) {
+        flash(btn, "Copy failed");
         return;
       }
-      navigator.clipboard.writeText(text).then(function () {
-        btn.textContent = "Copied";
-        setTimeout(function () {
-          btn.textContent = "Copy";
-        }, 1600);
-      });
+      navigator.clipboard.writeText(text).then(
+        function () {
+          flash(btn, "Copied");
+        },
+        function () {
+          flash(btn, "Copy failed");
+        }
+      );
     });
     wrap.appendChild(btn);
   }
