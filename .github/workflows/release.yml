@@ -87,6 +87,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get install -y z3 patchelf
+          z3 --version
           echo "$GITHUB_WORKSPACE/toolchain/install/bin" >> "$GITHUB_PATH"
 
       - name: Install LLVM 22 and z3 (macOS)
@@ -96,6 +97,7 @@ jobs:
           brew install llvm@22 z3 ninja cmake pkg-config || brew install llvm z3 ninja cmake pkg-config
           prefix=$(brew --prefix llvm@22 2>/dev/null || brew --prefix llvm)
           echo "$prefix/bin" >> "$GITHUB_PATH"
+          z3 --version
 
       - name: Install the CUDA toolkit (CUDA job only)
         if: matrix.cuda
