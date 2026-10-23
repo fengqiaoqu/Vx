@@ -1,0 +1,43 @@
+name: Docs links
+
+# Markdown outside www/ can keep pointing at design notes that were never committed, or that
+# left the tree when a discussion directory was removed. www/ is checked by pages.yml; this
+# job covers the rest with lychee so a stale reference fails the PR that introduces it.
+
+on:
+  pull_request:
+    paths:
+      - '**/*.md'
+      - 'lychee.toml'
+      - '.github/workflows/docs-links.yml'
+  push:
+    branches: [ main ]
+    paths:
+      - '**/*.md'
+      - 'lychee.toml'
+      - '.github/workflows/docs-links.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lychee:
+    name: Check markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the commit behind v2.9.0 rather than the tag. A tag can be moved; this job
+      # only needs a network client, but the pin keeps the checker itself fixed.
+      - name: Link check
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # www/ is excluded in lychee.toml (pages.yml already validates that tree).
+          args: >-
+            --config lychee.toml
+            --verbose
+            --no-progress
+            './**/*.md'
+          fail: true
+          token: ${{ secrets.GITHUB_TOKEN }}

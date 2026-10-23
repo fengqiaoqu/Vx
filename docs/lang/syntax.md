@@ -420,9 +420,8 @@ The initializer list is the one construction still written the older way, becaus
 *contents* rather than a shape and the type-applying constructors take neither. See
 [types.md §6](./types.md#6-topology-aware-allocation) for `::new()` and `::uninit()`.
 
-A **slice** (a row of a tensor, see the slice operators in
-[`slice_operators.md`](../discussions/implementation_plans/slice_operators.md)) can be initialized
-in place from a flat array literal:
+A **slice** (a row of a tensor) can be initialized in place from a flat array
+literal:
 
 ```rust
 let mut o = Tensor<f32>([[0.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 0.0]]);
