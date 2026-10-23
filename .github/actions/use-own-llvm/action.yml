@@ -30,7 +30,6 @@ runs:
       run: |
         install="$GITHUB_WORKSPACE/toolchain/install"
         # Glob without ls so a missing file prints a clear message under -eo pipefail.
-        # (ls | head fails before the guard, and 2>/dev/null hides the ls error.)
         shopt -s nullglob
         matches=("$install"/lib/enzyme/LLVMEnzyme-22.*)
         if [ ${#matches[@]} -eq 0 ]; then
