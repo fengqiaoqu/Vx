@@ -69,20 +69,24 @@ fi
 
 echo "LLVM found at: $LLVM_PATH"
 
-# z3 discharges seam and proof obligations (src/hir/seam.rs, src/hir/prover.rs). A version
-# change does not say "z3 disagreed"; it shows up as a missing W1027 or an expected-failure
-# that passes. Record what we found, and warn below the floor that has been seen to work
-# with the suite (Ubuntu 24.04's apt z3). Not a hard fail: the build itself does not need
-# z3, only seam-verification tests do.
+# z3 discharges proof obligations (src/hir/seam.rs, src/hir/prover.rs). A version change
+# does not say "z3 disagreed". It shows up as a missing W1027 or an expected-failure that
+# passes. Record what we found, and warn below the floor that has been seen to work with
+# the suite (Ubuntu 24.04's apt z3). Not a hard fail: the build itself does not need z3,
+# only the proof tests do. This is the single copy of the floor number. setup_linux.sh
+# points here.
 Z3_MIN_VERSION="${Z3_MIN_VERSION:-4.8.12}"
 if ! command -v z3 >/dev/null 2>&1; then
-    echo "WARNING: z3 not on PATH. Seam-verification tests will fail in ways that look like" >&2
-    echo "         compiler regressions. Install it (apt: z3; brew: z3) and re-run." >&2
+    echo "WARNING: z3 not on PATH. The proof tests fail with E6024 (no SMT solver)." >&2
+    echo "         Install it (apt: z3, brew: z3) and re-run." >&2
 else
     Z3_VERSION_LINE="$(z3 --version 2>/dev/null || true)"
     echo "z3: $Z3_VERSION_LINE"
     Z3_FOUND="$(printf '%s\n' "$Z3_VERSION_LINE" | sed -n 's/^Z3 version \([0-9][0-9.]*\).*/\1/p')"
-    if [ -n "$Z3_FOUND" ]; then
+    if [ -z "$Z3_FOUND" ]; then
+        echo "WARNING: could not parse a version from: $Z3_VERSION_LINE" >&2
+        echo "         Expected a line like 'Z3 version 4.8.12'. The floor check was skipped." >&2
+    else
         # Compare dotted triples numerically (4.8.12 vs 4.15.4).
         oldest="$(printf '%s\n%s\n' "$Z3_MIN_VERSION" "$Z3_FOUND" | sort -V | head -n1)"
         if [ "$oldest" != "$Z3_MIN_VERSION" ]; then
