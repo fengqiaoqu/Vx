@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 HEADING = re.compile(
-    r"<h([23])(\s[^>]*)>(.*?)</h\1>",
+    r"<h([23])(\s[^>]*)?>(.*?)</h\1>",
     re.DOTALL,
 )
 ID_ATTR = re.compile(r'\sid="([^"]+)"')
