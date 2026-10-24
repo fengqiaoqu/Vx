@@ -246,8 +246,7 @@ fn a_contract_without_z3_does_not_advertise_the_transfer_opt_out() {
     // Tiny fixture: one requires, no body proof needed beyond spawning z3.
     let none = compile_file(CONTRACTS, &[], false, false);
     assert!(
-        none.stdout.contains("no SMT solver available")
-            || none.stdout.contains("SMT solver error"),
+        none.stdout.contains("no SMT solver available") || none.stdout.contains("SMT solver error"),
         "missing z3 must surface through the contracts prover, got:\n{}",
         none.stdout
     );
