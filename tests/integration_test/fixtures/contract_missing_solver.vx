@@ -5,7 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// Fixture for missing_solver_test.rs (Vx#2083). Not under tests/frontend/fail —
+// Fixture for missing_solver_test.rs. Not under tests/frontend/fail —
 // that runner always executes RUN lines, and with z3 present this program is valid.
 
 fn tiled_index(tr : i32, tc : i32, row : i32, col : i32) -> i32

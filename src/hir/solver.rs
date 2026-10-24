@@ -55,8 +55,9 @@ pub fn unverified_allowed() -> bool {
 /// solver is available.
 ///
 /// Names the tool, why it is needed, and the escape hatch. A diagnostic that says only
-/// "z3 not found" leaves the reader to guess whether it mattered. Contracts use
-/// [`contracts_missing_message`] instead: they do not read `VX_ALLOW_UNVERIFIED` (Vx#2083).
+/// "z3 not found" leaves the reader to guess whether it mattered. The prover path
+/// (`prove_expr`, contracts, loop invariants, `Verified<T>`, `raw::` bounds) uses
+/// [`prover_missing_message`] instead: those paths do not read `VX_ALLOW_UNVERIFIED`.
 pub fn missing_message(reason: &str) -> String {
     format!(
         "no SMT solver available, so this proof obligation could not be discharged ({reason}). \
@@ -66,17 +67,17 @@ pub fn missing_message(reason: &str) -> String {
     )
 }
 
-/// The message shown when a contract (`requires` / `ensures`) cannot be proved because no
-/// solver is available.
+/// The message shown when the SMT prover cannot run because no solver is available.
 ///
-/// Same shape as [`missing_message`], but without the `VX_ALLOW_UNVERIFIED` advice: that
-/// variable only downgrades `relaxed` transfer checks, and naming it here sent readers to an
-/// escape hatch that does nothing for contracts (Vx#2083).
-pub fn contracts_missing_message(reason: &str) -> String {
+/// Used by every `SmtProver` caller: contracts, loop invariants, `Verified<T>` asserts and
+/// `raw::` bounds. Same shape as [`missing_message`], but without the `VX_ALLOW_UNVERIFIED`
+/// advice: that variable only downgrades `relaxed` transfer checks, and naming it here sent
+/// readers to an escape hatch that does nothing for these paths.
+pub fn prover_missing_message(reason: &str) -> String {
     format!(
-        "no SMT solver available, so this contract could not be discharged ({reason}). \
-         Vx runs `z3` to verify contracts and `relaxed` transfer visibility; install it \
-         (macOS: `brew install z3`, Ubuntu: `apt install z3`)"
+        "no SMT solver available, so this condition could not be proved ({reason}). \
+         Vx runs `z3` to verify contracts, loop invariants, `Verified<T>` asserts and \
+         `raw::` bounds; install it (macOS: `brew install z3`, Ubuntu: `apt install z3`)"
     )
 }
 
@@ -105,14 +106,22 @@ mod tests {
         );
     }
 
-    /// Contracts must not advertise `VX_ALLOW_UNVERIFIED`: that variable does not apply to them.
+    /// The prover message must not advertise `VX_ALLOW_UNVERIFIED`: that variable does not
+    /// apply to contracts, loop invariants, `Verified<T>` or `raw::` bounds.
     #[test]
-    fn the_contracts_message_names_the_tool_but_not_the_transfer_opt_out() {
-        let m = contracts_missing_message("No such file or directory");
+    fn the_prover_message_names_the_tool_but_not_the_transfer_opt_out() {
+        let m = prover_missing_message("No such file or directory");
         assert!(m.contains("z3"), "must name the tool: {m}");
         assert!(
-            m.contains("contracts") && m.contains("relaxed"),
+            m.contains("contracts")
+                && m.contains("loop invariants")
+                && m.contains("Verified")
+                && m.contains("raw::"),
             "must name the checks z3 verifies: {m}"
+        );
+        assert!(
+            m.contains("could not be proved"),
+            "must say the condition could not be proved: {m}"
         );
         assert!(
             !m.contains(ALLOW_UNVERIFIED),
