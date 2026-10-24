@@ -26,14 +26,14 @@
 // subset, so nothing half-lowered is ever emitted.
 //
 //===----------------------------------------------------------------------===//
-use crate::bytecode::{AFFINE_FOR_BRANCHES, HirInstruction, Opcode};
+use crate::bytecode::{HirInstruction, Opcode, AFFINE_FOR_BRANCHES};
 use crate::decline::{Decline, Lowered};
 use crate::gid::TypeId;
-use crate::hir::flatten::{DYN_DIM, ptr_gid, scalar_gid, tensor_gid_of};
+use crate::hir::flatten::{ptr_gid, scalar_gid, tensor_gid_of, DYN_DIM};
 use crate::mlir_ty::{mlir_scalar, mlir_vector};
 use crate::registry::ImmutableGlobalRegistry;
 use crate::syntax::scalar_of;
-use crate::syntax::{Dim, ElementType, Function, Type, is_void_ty};
+use crate::syntax::{is_void_ty, Dim, ElementType, Function, Type};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -93,11 +93,18 @@ impl std::error::Error for ModuleEmitError {}
 fn mlir_float_literal(value: f64, bits: u32) -> String {
     if !value.is_finite() {
         return match bits {
+            16 => {
+                // f16 / bf16: write 16-bit hex. Inf/NaN use IEEE half encoding; comptime
+                // refuses f16 today, so this arm is defensive.
+                let sign = ((value.to_bits() >> 63) as u16) << 15;
+                let mag = if value.is_nan() { 0x7E00u16 } else { 0x7C00u16 };
+                format!("0x{:04X}", sign | mag)
+            }
             32 => format!("0x{:08X}", (value as f32).to_bits()),
             64 => format!("0x{:016X}", value.to_bits()),
-            // Narrower floats reach here only after nearest_narrow_value; keep f64 hex as a
-            // last resort so the emitter still produces parseable text.
-            _ => format!("0x{:016X}", value.to_bits()),
+            other => {
+                panic!("mlir_float_literal: non-finite float with unexpected bit width {other}")
+            }
         };
     }
     let text = format!("{value:?}");
@@ -1368,9 +1375,9 @@ fn static_tile_bytes(elem: &ElementType, shape: &[String]) -> Option<u64> {
 /// signature, so a materialized function pointer's type matches its callee's header exactly. (#242)
 pub(crate) fn ty_mlir(ty: &Type, ctx: &EmitCtx) -> Lowered<String> {
     let ty = peel_wrappers(ty); // Verified/Ref/Pinned spell as their runtime inner type
-    // A borrowed tensor is spelled as the tensor. A memref is already a reference, and a call
-    // site hands over the memref itself; `!llvm.ptr` gave the signature a type nothing passes
-    // (Vx#417).
+                                // A borrowed tensor is spelled as the tensor. A memref is already a reference, and a call
+                                // site hands over the memref itself; `!llvm.ptr` gave the signature a type nothing passes
+                                // (Vx#417).
     let ty = match ty {
         Type::Borrow { inner, .. } if crate::hir::flatten::tensor_gid_of(inner).is_some() => {
             peel_wrappers(inner)
@@ -4068,16 +4075,16 @@ mod tests {
         );
         assert_eq!(
             super::mlir_float_literal(f64::NAN, 64),
-            format!("0x{:016X}", f64::NAN.to_bits())
+            "0x7FF8000000000000"
         );
         assert_eq!(super::mlir_float_literal(f64::INFINITY, 32), "0x7F800000");
         assert_eq!(
             super::mlir_float_literal(f64::NEG_INFINITY, 32),
             "0xFF800000"
         );
-        assert_eq!(
-            super::mlir_float_literal(f64::NAN, 32),
-            format!("0x{:08X}", (f64::NAN as f32).to_bits())
-        );
+        assert_eq!(super::mlir_float_literal(f64::NAN, 32), "0x7FC00000");
+        assert_eq!(super::mlir_float_literal(f64::INFINITY, 16), "0x7C00");
+        assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, 16), "0xFC00");
+        assert_eq!(super::mlir_float_literal(f64::NAN, 16), "0x7E00");
     }
 }
