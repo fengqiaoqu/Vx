@@ -26,14 +26,14 @@
 // subset, so nothing half-lowered is ever emitted.
 //
 //===----------------------------------------------------------------------===//
-use crate::bytecode::{HirInstruction, Opcode, AFFINE_FOR_BRANCHES};
+use crate::bytecode::{AFFINE_FOR_BRANCHES, HirInstruction, Opcode};
 use crate::decline::{Decline, Lowered};
 use crate::gid::TypeId;
-use crate::hir::flatten::{ptr_gid, scalar_gid, tensor_gid_of, DYN_DIM};
+use crate::hir::flatten::{DYN_DIM, ptr_gid, scalar_gid, tensor_gid_of};
 use crate::mlir_ty::{mlir_scalar, mlir_vector};
 use crate::registry::ImmutableGlobalRegistry;
 use crate::syntax::scalar_of;
-use crate::syntax::{is_void_ty, Dim, ElementType, Function, Type};
+use crate::syntax::{Dim, ElementType, Function, Type, is_void_ty};
 use rayon::prelude::*;
 use std::collections::HashMap;
 
@@ -87,12 +87,22 @@ impl std::error::Error for ModuleEmitError {}
 /// The MLIR type string for a scalar element type. Integers are signless (signedness lives in the
 /// op, e.g. `divsi`/`divui`); `bool` is `i1`.
 /// Format a float so MLIR can parse it back: Rust's `{:?}` prints `0.00001` as `1e-5`,
-/// and MLIR needs a decimal point before the exponent (Vx#384).
-fn mlir_float_literal(value: f64) -> String {
+/// and MLIR needs a decimal point before the exponent (Vx#384). A non-finite value is written
+/// as its bit pattern in hex at `bits` width — MLIR does not accept `inf` / `-inf` / `NaN`
+/// as float attribute text (Vx#2081).
+fn mlir_float_literal(value: f64, bits: u32) -> String {
+    if !value.is_finite() {
+        return match bits {
+            32 => format!("0x{:08X}", (value as f32).to_bits()),
+            64 => format!("0x{:016X}", value.to_bits()),
+            // Narrower floats reach here only after nearest_narrow_value; keep f64 hex as a
+            // last resort so the emitter still produces parseable text.
+            _ => format!("0x{:016X}", value.to_bits()),
+        };
+    }
     let text = format!("{value:?}");
     match text.split_once(['e', 'E']) {
-        // `1e-5` -> `1.0e-5`. A mantissa that already has a point, and anything without an
-        // exponent at all (`288.0`, `inf`, `NaN`), is left exactly as Rust printed it.
+        // `1e-5` -> `1.0e-5`. A mantissa that already has a point is left as Rust printed it.
         Some((mantissa, exponent)) if !mantissa.contains('.') => format!("{mantissa}.0e{exponent}"),
         _ => text,
     }
@@ -1358,9 +1368,9 @@ fn static_tile_bytes(elem: &ElementType, shape: &[String]) -> Option<u64> {
 /// signature, so a materialized function pointer's type matches its callee's header exactly. (#242)
 pub(crate) fn ty_mlir(ty: &Type, ctx: &EmitCtx) -> Lowered<String> {
     let ty = peel_wrappers(ty); // Verified/Ref/Pinned spell as their runtime inner type
-                                // A borrowed tensor is spelled as the tensor. A memref is already a reference, and a call
-                                // site hands over the memref itself; `!llvm.ptr` gave the signature a type nothing passes
-                                // (Vx#417).
+    // A borrowed tensor is spelled as the tensor. A memref is already a reference, and a call
+    // site hands over the memref itself; `!llvm.ptr` gave the signature a type nothing passes
+    // (Vx#417).
     let ty = match ty {
         Type::Borrow { inner, .. } if crate::hir::flatten::tensor_gid_of(inner).is_some() => {
             peel_wrappers(inner)
@@ -2513,7 +2523,7 @@ pub fn emit_function_mlir(
         Type::Scalar(_) => {
             return Err(Decline::TypeNotModelled {
                 what: "a generic scalar return type",
-            })
+            });
         }
         _ => None, // non-scalar: a struct return is handled below; anything else is void
     };
@@ -3366,7 +3376,10 @@ mod tests {
              fn make(tensor: &Tensor<f32,[4]>) -> i32 { \
                let holder = Holder<i32> { value: 5, tensor: tensor, tail: 41 }; return holder.value; }",
             |layouts| {
-                let layout = layouts.iter_mut().find(|layout| layout.name == "Holder").expect("Holder layout");
+                let layout = layouts
+                    .iter_mut()
+                    .find(|layout| layout.name == "Holder")
+                    .expect("Holder layout");
                 // Reproduce the former descriptor-as-pointer record while keeping its registry ID.
                 layout.size_bytes = 24;
                 layout.fields[1].layout.size = 8;
@@ -3394,9 +3407,7 @@ mod tests {
                     .find(|l| l.name == "Holder")
                     .expect("Holder layout");
                 let emitter = AggLayout::from_generated(layout);
-                let item = layout.fields[0]
-                    .aggregate_id
-                    .expect("Item aggregate ID");
+                let item = layout.fields[0].aggregate_id.expect("Item aggregate ID");
                 assert_eq!(
                     emitter.field_agg[0],
                     Some(item),
@@ -4029,17 +4040,44 @@ mod tests {
     #[test]
     fn float_literals_keep_a_decimal_point_before_the_exponent() {
         // The exact case that broke `struct_codegen.vx`.
-        assert_eq!(super::mlir_float_literal(1e-5), "1.0e-5");
+        assert_eq!(super::mlir_float_literal(1e-5, 64), "1.0e-5");
 
         // The property, over a spread of magnitudes: whatever Rust chooses to print, the
         // mantissa always carries a point.
         for value in [1e-5, 1e-7, 2.5e-9, 288.0, 0.5, -0.25, 1.0, 3.4e38] {
-            let text = super::mlir_float_literal(value);
+            let text = super::mlir_float_literal(value, 64);
             let mantissa = text.split(['e', 'E']).next().unwrap();
             assert!(
                 mantissa.contains('.'),
                 "{value} formatted as {text}, whose mantissa has no decimal point"
             );
         }
+    }
+
+    /// MLIR rejects `inf` / `-inf` / `NaN` as float attribute text. Non-finite constants must
+    /// be the bit pattern in hex, at the width of the type (Vx#2081).
+    #[test]
+    fn float_literals_write_non_finite_as_hex_bits() {
+        assert_eq!(
+            super::mlir_float_literal(f64::INFINITY, 64),
+            "0x7FF0000000000000"
+        );
+        assert_eq!(
+            super::mlir_float_literal(f64::NEG_INFINITY, 64),
+            "0xFFF0000000000000"
+        );
+        assert_eq!(
+            super::mlir_float_literal(f64::NAN, 64),
+            format!("0x{:016X}", f64::NAN.to_bits())
+        );
+        assert_eq!(super::mlir_float_literal(f64::INFINITY, 32), "0x7F800000");
+        assert_eq!(
+            super::mlir_float_literal(f64::NEG_INFINITY, 32),
+            "0xFF800000"
+        );
+        assert_eq!(
+            super::mlir_float_literal(f64::NAN, 32),
+            format!("0x{:08X}", (f64::NAN as f32).to_bits())
+        );
     }
 }
