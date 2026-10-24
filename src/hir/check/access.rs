@@ -34,7 +34,7 @@ impl<'a> TypeChecker<'a> {
         match ty {
             Type::Scalar(e) if !matches!(e, ElementType::Generic(_)) => return true,
             Type::Borrow { is_mut: false, .. } | Type::Pointer(..) | Type::Function(..) => {
-                return true
+                return true;
             }
             _ => {}
         }
@@ -124,14 +124,14 @@ impl<'a> TypeChecker<'a> {
                 .const_value(&decl.expr, &mut vec![decl.name.clone()])
                 .is_some() =>
             {
-                return report(self, "has a value that does not fit its declared type")
+                return report(self, "has a value that does not fit its declared type");
             }
             None => {
                 return report(
                     self,
                     "has no value known while compiling: write a literal, or arithmetic on \
                      literals and other consts",
-                )
+                );
             }
         };
         match (value, elem == ElementType::Bool) {
