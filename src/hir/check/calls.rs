@@ -137,6 +137,7 @@ impl<'a> TypeChecker<'a> {
                     new_args.extend(args.clone());
 
                     *expr = Expr::FunctionCall(FunctionCallExpr {
+                        owner_type_args: None,
                         name: call_name.into(),
                         type_args: None,
                         args: new_args,
@@ -674,6 +675,7 @@ impl<'a> TypeChecker<'a> {
         }
         match expr {
             Expr::FunctionCall(FunctionCallExpr {
+                owner_type_args: _,
                 name,
                 type_args,
                 args,
@@ -882,6 +884,7 @@ impl<'a> TypeChecker<'a> {
                             new_args.extend(args.clone());
 
                             *expr = Expr::FunctionCall(FunctionCallExpr {
+                                owner_type_args: None,
                                 name: call_name.into(),
                                 type_args: None,
                                 args: new_args,
@@ -1742,11 +1745,14 @@ impl<'a> TypeChecker<'a> {
                 })
                 .collect();
 
-            let mut inst_func = self.instantiate_function(
+            let inst_func = self.instantiate_function(
                 &modified_func,
                 &found_mapping,
                 &std::collections::HashMap::new(),
             );
+            let Some(mut inst_func) = inst_func else {
+                return Type::Unknown;
+            };
             let inst_ret = inst_func.return_type.clone();
             let inst_name = inst_func.name.clone();
             let inst_params: Vec<Type> = inst_func.params.iter().map(|(_, t)| t.clone()).collect();
@@ -2015,7 +2021,7 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            let mut inst_func = self.instantiate_function(generic_func, &mapping, &topo_mapping);
+            let mut inst_func = self.instantiate_function(generic_func, &mapping, &topo_mapping)?;
             let inst_ret = inst_func.return_type.clone();
             let inst_name = inst_func.name.clone();
 
@@ -2680,7 +2686,7 @@ impl<'a> TypeChecker<'a> {
         mapping: &std::collections::HashMap<crate::symbol::Symbol, Type>,
         base_ty: &Type,
         ib: &decl::ImplBlock,
-    ) -> (Function, String) {
+    ) -> Option<(Function, String)> {
         // Provide generic mapping to the method itself by copying impl block generics
         let mut modified_func = generic_method.clone();
         modified_func.generics = mapping
@@ -2691,7 +2697,7 @@ impl<'a> TypeChecker<'a> {
             })
             .collect();
         let mut method_func =
-            self.instantiate_function(&modified_func, mapping, &std::collections::HashMap::new());
+            self.instantiate_function(&modified_func, mapping, &std::collections::HashMap::new())?;
 
         // The name the definition was minted under: receiver, then the trait and its arguments
         // when the method came from a trait impl. Shared with the definition site, so a call and
@@ -2725,7 +2731,7 @@ impl<'a> TypeChecker<'a> {
             self.mono.being_checked.remove(&mangled_sym);
             self.mono.functions.push((func_to_check, 0)); // 0 will fall back to caller_module_idx
         }
-        (method_func, mangled_name)
+        Some((method_func, mangled_name))
     }
 
     /// Instantiate the resolved generic method, register + type-check the monomorphized function,
@@ -2770,8 +2776,11 @@ impl<'a> TypeChecker<'a> {
             None,
         );
 
-        let (method_func, mangled_name) =
-            self.instantiate_impl_method(&generic_method, &mapping, base_ty, ib);
+        let Some((method_func, mangled_name)) =
+            self.instantiate_impl_method(&generic_method, &mapping, base_ty, ib)
+        else {
+            return (Type::Unknown, obj.clone());
+        };
 
         // Rewrite AST from MethodCall to FunctionCall
         let mut call_args = vec![];
@@ -2840,6 +2849,7 @@ impl<'a> TypeChecker<'a> {
         );
 
         let mut func_call = Expr::FunctionCall(FunctionCallExpr {
+            owner_type_args: None,
             name: crate::symbol::Symbol::from(mangled_name.as_str()),
             type_args: None,
             args: call_args,
@@ -2961,6 +2971,7 @@ impl<'a> TypeChecker<'a> {
                         let mangled_name = format!("{}_{}", prefix, _method);
                         self.record_call_edge(&mangled_name, &method_span);
                         let func_call = Expr::FunctionCall(FunctionCallExpr {
+                            owner_type_args: None,
                             name: crate::symbol::Symbol::from(mangled_name.as_str()),
                             type_args: None,
                             args: args.clone(),

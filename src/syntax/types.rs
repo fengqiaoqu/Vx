@@ -892,6 +892,10 @@ impl Type {
 
     pub fn substitute(&self, mapping: &std::collections::HashMap<Symbol, Type>) -> Type {
         match self {
+            // A trait's `Self` has no concrete target while the parser reads its body.
+            Type::Struct(name, None) if name.as_ref() == "Self" => {
+                mapping.get(name).cloned().unwrap_or_else(|| self.clone())
+            }
             Type::Generic(name, _) => {
                 if let Some(concrete) = mapping.get(name) {
                     concrete.clone()
@@ -1097,7 +1101,7 @@ impl Type {
 
 /// The value of a const generic argument written with numbers and `+ - * /`, as text: `3.14`,
 /// `-2`, or `3` for `1 + 2`. `None` for anything else.
-fn const_value_text(e: &crate::syntax::Expr) -> Option<String> {
+pub(crate) fn const_value_text(e: &crate::syntax::Expr) -> Option<String> {
     use crate::syntax::expr::{BinaryOp, UnaryOp};
     use crate::syntax::Expr;
     #[derive(Clone, Copy)]
@@ -1495,7 +1499,7 @@ impl Mangle for Type {
             // Extents are part of the identity: `[2, 3]` and `[4, 5]` are different types that
             // lower to different memrefs, so a generic instantiated at both needs two symbols
             // rather than one body serving both (Vx#401). Rank alone was too coarse to separate
-            // them. Topology stays excluded. A dimension the canonical forms below cannot spell
+            // them. Function specializations add placement separately. A dimension these forms cannot spell
             // contributes `d`, which is why two such dimensions can still share a name. `?` is
             // `_`, a character a symbol may carry.
             Type::Tensor(el, dims, _) => {
@@ -1861,14 +1865,14 @@ mod tests {
     }
 
     #[test]
-    fn test_mangle_tensor_ignores_topology_and_shape() {
+    fn legacy_type_mangle_omits_tensor_placement() {
         let ty_with = Type::Tensor(
             ElementType::F32,
             vec![],
             Some(Placement::on(Topology::gpu(0))),
         );
         let ty_without = Type::Tensor(ElementType::F32, vec![], None);
-        // Topology is intentionally not included in mangling
+        // Function specializations add placement to this legacy name separately.
         assert_eq!(ty_with.mangle(), ty_without.mangle());
         assert_eq!(ty_with.mangle(), "Tensor$f32");
     }
