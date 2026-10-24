@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
 //===----------------------------------------------------------------------===//
-// A const whose value does not fit its type is reported even when nothing uses it
-// (Vx#2094).
+// A computed const whose value does not fit its type is reported even when unused.
 //
 // RUN: not vxc %s 2>&1 | FileCheck %s --implicit-check-not=Error
 

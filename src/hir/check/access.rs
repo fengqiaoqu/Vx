@@ -80,7 +80,7 @@ impl<'a> TypeChecker<'a> {
     /// survive. Anything else is evaluated while compiling, in `i64` or `f64`, with the other
     /// `const`s' values in scope. When `report` is set, answers `None` with E3044 for a value
     /// that does not fit or cannot be worked out. The whole-program pass reports once per
-    /// `const`; a use substitutes the value without reporting again (Vx#2094).
+    /// `const`; a use substitutes the value without reporting again.
     pub(crate) fn const_literal(
         &mut self,
         decl: &crate::syntax::ConstDecl,
@@ -109,6 +109,24 @@ impl<'a> TypeChecker<'a> {
             let float_literal = n.value.contains('.');
             if (n.ty.is_some() && n.ty.as_ref() != Some(&elem)) || (float_literal && !is_float) {
                 return report(self, "has a value whose type differs from the declared one");
+            }
+            // A bare integer literal was returned as written, with no range check. A value
+            // that does not fit (for example `const D : u8 = 300`) then crashed later in the
+            // flat emitter instead of getting one E3044 at the declaration.
+            if !float_literal && !is_float {
+                if let Some((min, max)) =
+                    crate::hir::comptime_interpreter::ComptimeInterpreter::integer_range(&elem)
+                {
+                    match n.value.parse::<i128>() {
+                        Ok(v) if v < min || v > max => {
+                            return report(self, "has a value that does not fit its declared type");
+                        }
+                        Err(_) => {
+                            return report(self, "has a value that does not fit its declared type");
+                        }
+                        Ok(_) => {}
+                    }
+                }
             }
             return Some(Expr::Number(NumberExpr {
                 value: n.value.clone(),
