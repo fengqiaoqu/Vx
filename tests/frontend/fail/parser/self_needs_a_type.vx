@@ -1,0 +1,26 @@
+//===- self_needs_a_type.vx - Vx Compiler ----------------------*- Vx -*-===//
+//
+// Part of the Vx Project, under the Apache License v2.0 with LLVM Exceptions.
+// See LICENSE for license information.
+// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+//
+//===----------------------------------------------------------------------===//
+// RUN: not vxc %s 2>&1 | FileCheck %s --implicit-check-not=Error
+//
+// A method's `self` needs a type. Rust accepts a bare `self`; Vx does not.
+// The message names the forms and fills in the impl type.
+
+struct P {
+  a : i64,
+}
+
+impl P {
+  // CHECK: Error at [[@LINE+1]]:{{[0-9]+}}: `self` needs a type; write `self : &P`, `self : &mut P`, or `self : P`
+  fn get(self) -> i64 {
+    return self.a;
+  }
+}
+
+fn main() -> i32 {
+  return 0;
+}
