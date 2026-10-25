@@ -380,7 +380,7 @@ impl<'a> Parser<'a> {
                 other => {
                     return Err(
                         self.error(&format!("Expected a topology field name, got {:?}", other))
-                    );
+                    )
                 }
             };
             self.consume(&TokenType::Colon, "Expected ':' after topology field")?;
@@ -426,7 +426,7 @@ impl<'a> Parser<'a> {
                                 return Err(self.error(&format!(
                                     "`dtypes:` expects element type names, got {:?}",
                                     other
-                                )));
+                                )))
                             }
                         };
                         match name.parse::<crate::syntax::ElementType>() {
@@ -435,7 +435,7 @@ impl<'a> Parser<'a> {
                                 return Err(self.error(&format!(
                                     "`dtypes:` does not know the element type '{}'",
                                     name
-                                )));
+                                )))
                             }
                         }
                         if !self.match_token(&TokenType::Comma) {
@@ -460,7 +460,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "`chip:` expects a GPU generation such as sm_90a, got {:?}",
                                 other
-                            )));
+                            )))
                         }
                     });
                 }
@@ -521,39 +521,41 @@ impl<'a> Parser<'a> {
                     return Err(self.error(&format!(
                         "`levels:` expects a level name such as `blocks`, got {:?}",
                         other
-                    )));
+                    )))
                 }
             };
             let (mut max_lanes, mut lanes, mut memory) = (None, None, None);
             if self.match_token(&TokenType::LeftParen) {
                 while !self.check(&TokenType::RightParen) && !self.check(&TokenType::Eof) {
-                    let fact =
-                        match &self.advance().kind {
-                            TokenType::Identifier(s) => s.to_string(),
-                            other => return Err(self.error(&format!(
+                    let fact = match &self.advance().kind {
+                        TokenType::Identifier(s) => s.to_string(),
+                        other => {
+                            return Err(self.error(&format!(
                                 "Expected `max_lanes`, `lanes` or `memory` in a level, got {:?}",
                                 other
-                            ))),
-                        };
+                            )))
+                        }
+                    };
                     self.consume(&TokenType::Colon, "Expected ':' after a fact of a level")?;
                     match fact.as_str() {
                         "max_lanes" => max_lanes = Some(self.parse_level_count(&fact)?),
                         "lanes" => lanes = Some(self.parse_level_count(&fact)?),
                         "memory" => {
-                            memory =
-                                Some(match &self.advance().kind {
-                                    TokenType::Identifier("cta") => crate::syntax::Scope::Cta,
-                                    TokenType::Identifier("thread") => crate::syntax::Scope::Thread,
-                                    other => return Err(self.error(&format!(
+                            memory = Some(match &self.advance().kind {
+                                TokenType::Identifier("cta") => crate::syntax::Scope::Cta,
+                                TokenType::Identifier("thread") => crate::syntax::Scope::Thread,
+                                other => {
+                                    return Err(self.error(&format!(
                                         "`memory:` of a level expects `cta` or `thread`, got {:?}",
                                         other
-                                    ))),
-                                })
+                                    )))
+                                }
+                            })
                         }
                         other => {
                             return Err(self.error(&format!(
                                 "A level has `max_lanes`, `lanes` and `memory`, not `{other}`"
-                            )));
+                            )))
                         }
                     }
                     if !self.match_token(&TokenType::Comma) {
@@ -593,12 +595,12 @@ impl<'a> Parser<'a> {
                 LevelKind::Blocks if max_lanes.is_none() => {
                     return Err(self.error(&format!(
                         "`{name}` is the block level, so it needs `max_lanes:`"
-                    )));
+                    )))
                 }
                 LevelKind::Subgroups if lanes.is_none() => {
                     return Err(self.error(&format!(
                         "`{name}` is the subgroup level, so it needs `lanes:`"
-                    )));
+                    )))
                 }
                 _ => {}
             }
@@ -695,7 +697,7 @@ impl<'a> Parser<'a> {
                 other => {
                     return Err(
                         self.error(&format!("Expected a memory field name, got {:?}", other))
-                    );
+                    )
                 }
             };
             // `overcommit` is a bare flag (no `: value`).
@@ -714,7 +716,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "`scope:` expects device/sm/cta/thread, got {:?}",
                                 other
-                            )));
+                            )))
                         }
                     };
                     scope = Some(match s.as_str() {
@@ -726,7 +728,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "`scope:` expects device/sm/cta/thread, got '{}'",
                                 other
-                            )));
+                            )))
                         }
                     });
                 }
@@ -753,7 +755,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "Expected 'streamed' or 'sequenced' for `crossing:`, got {:?}",
                                 other
-                            )));
+                            )))
                         }
                     };
                     crossing = match kind.as_str() {
@@ -763,7 +765,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "`crossing:` expects 'streamed' or 'sequenced', got '{}'",
                                 other
-                            )));
+                            )))
                         }
                     };
                 }
@@ -774,7 +776,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "Expected 'explicit' or 'cached' for `managed:`, got {:?}",
                                 other
-                            )));
+                            )))
                         }
                     };
                     managed = match kind.as_str() {
@@ -784,7 +786,7 @@ impl<'a> Parser<'a> {
                             return Err(self.error(&format!(
                                 "`managed:` expects 'explicit' or 'cached', got '{}'",
                                 other
-                            )));
+                            )))
                         }
                     };
                 }
@@ -856,7 +858,7 @@ impl<'a> Parser<'a> {
                     "Expected a frequency unit ({}) after `clock:`, got {:?}",
                     crate::units::FreqUnit::ALL,
                     other
-                )));
+                )))
             }
         };
         let unit = crate::units::FreqUnit::parse(&unit_str).ok_or_else(|| {
@@ -920,7 +922,7 @@ impl<'a> Parser<'a> {
                 return Err(self.error(&format!(
                     "Expected 's' or 'cyc' after '/' in bandwidth, got {:?}",
                     other
-                )));
+                )))
             }
         };
         match per_str.as_str() {
@@ -1007,7 +1009,7 @@ impl<'a> Parser<'a> {
                     "Expected a size unit ({}), got {:?}",
                     crate::units::ByteUnit::ALL,
                     other
-                )));
+                )))
             }
         };
         crate::units::ByteUnit::parse(&unit).ok_or_else(|| {
@@ -1902,13 +1904,11 @@ impl Transfer<Memory::L2, Memory::SMEM> for Topology::Dev {
         assert_eq!(t.methods[0].name.as_ref(), "move_tile");
         // Doc comments attach at both levels, mirroring impl blocks.
         assert!(t.doc_comment.as_deref().unwrap().contains("copy shape"));
-        assert!(
-            t.methods[0]
-                .doc_comment
-                .as_deref()
-                .unwrap()
-                .contains("cooperative copy")
-        );
+        assert!(t.methods[0]
+            .doc_comment
+            .as_deref()
+            .unwrap()
+            .contains("cooperative copy"));
         // And it did NOT leak into the trait-impl list.
         assert!(program.impls.is_empty());
     }
@@ -2094,7 +2094,8 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
 
     #[test]
     fn test_parse_let_mut_with_type() {
-        let input = "fn main() -> Tensor<f32, [?, ?]> { let mut x: Tensor<f32, [?, ?]> = Tensor<f32>([1, 2]); }";
+        let input =
+            "fn main() -> Tensor<f32, [?, ?]> { let mut x: Tensor<f32, [?, ?]> = Tensor<f32>([1, 2]); }";
         let tokens = Lexer::new(input).tokenize();
         let mut parser = Parser::new(&tokens, input);
         let program = parser.parse().unwrap();
@@ -2207,6 +2208,7 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
             "expected span on across, got: {msg}"
         );
     }
+
 
     #[test]
     fn test_self_parameter_needs_a_type() {
