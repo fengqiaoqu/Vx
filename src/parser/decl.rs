@@ -42,18 +42,12 @@ impl<'a> Parser<'a> {
                     self.mut_params.push(name.clone().into());
                 }
                 // Rust lets a method take a bare `self`. Vx needs an explicit type. Say so
-                // instead of "Expected ':'", and fill in the impl type when we have it.
+                // instead of "Expected ':'". Suggest `Self`, which works in an impl and in a trait.
                 if name == "self" && !self.check(&TokenType::Colon) {
-                    let message = match &self.impl_self {
-                        Some(ty) => format!(
-                            "`self` needs a type; write `self : &{ty}`, `self : &mut {ty}`, or `self : {ty}`"
-                        ),
-                        None => {
-                            "`self` needs a type; write `self : &T`, `self : &mut T`, or `self : T`"
-                                .to_string()
-                        }
-                    };
-                    return Err(self.error_at(&name_token, &message));
+                    return Err(self.error_at(
+                        &name_token,
+                        "`self` needs a type. Write `self : &Self`, `self : &mut Self` or `self : Self`.",
+                    ));
                 }
                 self.consume(&TokenType::Colon, "Expected ':'")?;
                 let ty = self.parse_type()?;
@@ -2211,8 +2205,7 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
 
     #[test]
     fn test_self_parameter_needs_a_type() {
-        // A bare `self` in an impl method is a Rust habit. Say what to write, with the
-        // impl type filled in.
+        // A bare `self` in an impl method is a Rust habit. Suggest `Self`.
         let input = "impl P { fn get(self) -> i64 { return self.a; } }";
         let tokens = crate::lexer::Lexer::new(input).tokenize();
         let mut parser = Parser::new(&tokens, input);
@@ -2221,12 +2214,37 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
             .expect_err("bare self should fail")
             .format(input);
         assert!(
-            msg.contains("`self` needs a type; write `self : &P`, `self : &mut P`, or `self : P`"),
+            msg.contains(
+                "`self` needs a type. Write `self : &Self`, `self : &mut Self` or `self : Self`."
+            ),
             "message was: {msg}"
         );
         assert!(
             !msg.contains("Expected ':'"),
             "must not fall through to the generic colon error: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_self_parameter_needs_a_type_in_a_trait() {
+        // A trait method uses the same param parser and has no impl_self. The message
+        // must still name `Self`, not a placeholder like `T`.
+        let input = "trait Get { fn get(self) -> i64; }";
+        let tokens = crate::lexer::Lexer::new(input).tokenize();
+        let mut parser = Parser::new(&tokens, input);
+        let msg = parser
+            .parse_trait_decl()
+            .expect_err("bare self in a trait should fail")
+            .format(input);
+        assert!(
+            msg.contains(
+                "`self` needs a type. Write `self : &Self`, `self : &mut Self` or `self : Self`."
+            ),
+            "message was: {msg}"
+        );
+        assert!(
+            !msg.contains("`self : &T`") && !msg.contains("`self : T`"),
+            "must not suggest a placeholder T: {msg}"
         );
     }
 

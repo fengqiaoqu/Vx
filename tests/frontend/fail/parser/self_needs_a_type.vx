@@ -7,15 +7,15 @@
 //===----------------------------------------------------------------------===//
 // RUN: not vxc %s 2>&1 | FileCheck %s --implicit-check-not=Error
 //
-// A method's `self` needs a type. Rust accepts a bare `self`; Vx does not.
-// The message names the forms and fills in the impl type.
+// A method's `self` needs a type. Rust accepts a bare `self`. Vx does not.
+// The message names the forms with `Self`.
 
 struct P {
   a : i64,
 }
 
 impl P {
-  // CHECK: Error at [[@LINE+1]]:{{[0-9]+}}: `self` needs a type; write `self : &P`, `self : &mut P`, or `self : P`
+  // CHECK: Error at [[@LINE+1]]:10: `self` needs a type. Write `self : &Self`, `self : &mut Self` or `self : Self`.
   fn get(self) -> i64 {
     return self.a;
   }
