@@ -2209,7 +2209,6 @@ fn distributed_matmul(a: Ref<Tensor<f32, [?, ?]>, Memory::CPU_DRAM>, b: Ref<Tens
         );
     }
 
-
     #[test]
     fn test_self_parameter_needs_a_type() {
         // A bare `self` in an impl method is a Rust habit. Say what to write, with the
