@@ -20,7 +20,7 @@ use super::*;
 /// keeps implicit numeric conversion out of the language: the literal is born at the right type
 /// rather than silently coerced.
 pub(crate) fn infer_number_literal(s: &str) -> Result<(&str, Option<ElementType>), String> {
-    let idx = s.find(|c: char| c.is_alphabetic() || c == '_');
+    let idx = number_suffix_start(s);
     let (num_part, suffix_part) = match idx {
         Some(i) => (&s[..i], &s[i..]),
         None => (s, ""),
@@ -34,6 +34,40 @@ pub(crate) fn infer_number_literal(s: &str) -> Result<(&str, Option<ElementType>
     Ok((num_part, el_ty))
 }
 
+/// Byte index where a type suffix begins (`i32`, `f64`, …), or `None` when the whole
+/// spelling is the number. An `e`/`E` that starts a scientific exponent (`1e-15`, `3.4E39`)
+/// stays in the number; only a letter that is not part of an exponent is the suffix.
+fn number_suffix_start(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if c.is_ascii_digit() || c == '_' || c == '.' || c == '+' || c == '-' {
+            i += 1;
+            continue;
+        }
+        if c == 'e' || c == 'E' {
+            let mut rest = s[i + 1..].chars();
+            let exp_ok = match rest.next() {
+                Some('+') | Some('-') => rest.next().is_some_and(|d| d.is_ascii_digit()),
+                Some(d) if d.is_ascii_digit() => true,
+                _ => false,
+            };
+            if exp_ok {
+                i += 1;
+                continue;
+            }
+        }
+        if c.is_alphabetic() {
+            return Some(i);
+        }
+        return Some(i);
+    }
+    None
+}
+
+pub(crate) use crate::syntax::types::is_float_literal_spelling;
+
 /// The spelling-based default element type for an *untyped* numeric literal — used when no
 /// context supplies an expected type (a bare `42` or `3.14`). Reproduces the historical parser
 /// defaults so an un-annotated literal keeps the type it always had: a decimal is `f32` (`f64`
@@ -43,7 +77,7 @@ pub(crate) fn infer_number_literal(s: &str) -> Result<(&str, Option<ElementType>
 /// arm and the flat lowerer's `infer_elem`, so both backends agree on an un-annotated literal's
 /// type (a differential-parity requirement). `num_part` is already suffix-stripped.
 pub(crate) fn default_number_elem(num_part: &str) -> ElementType {
-    if num_part.contains('.') {
+    if crate::syntax::types::is_float_literal_spelling(num_part) {
         if let Ok(f32_val) = num_part.parse::<f32>() {
             if f32_val.is_infinite() {
                 if let Ok(f64_val) = num_part.parse::<f64>() {
@@ -1770,13 +1804,29 @@ mod tests {
     }
 
     #[test]
-    fn test_infer_scientific_notation_is_suffix_split() {
-        // infer_number_literal splits at first alphabetic char.
-        // "1e10" → num_part="1", suffix="e10" → Err (e10 is not a valid ElementType)
-        // This is a known limitation: scientific notation is not supported directly.
-        assert!(infer_number_literal("1e10").is_err());
-        // "3.4e39" → num_part="3.4", suffix="e39" → Err
-        assert!(infer_number_literal("3.4e39").is_err());
+    fn test_infer_scientific_notation() {
+        let (num, ty) = infer_number_literal("1e10").unwrap();
+        assert_eq!(num, "1e10");
+        assert_eq!(ty, None);
+        let (num, ty) = infer_number_literal("1.0e-15").unwrap();
+        assert_eq!(num, "1.0e-15");
+        assert_eq!(ty, None);
+        let (num, ty) = infer_number_literal("3.4E39").unwrap();
+        assert_eq!(num, "3.4E39");
+        assert_eq!(ty, None);
+        let (num, ty) = infer_number_literal("1e-15f64").unwrap();
+        assert_eq!(num, "1e-15");
+        assert_eq!(ty, Some(ElementType::F64));
+        let (num, ty) = infer_number_literal("1.5E3f32").unwrap();
+        assert_eq!(num, "1.5E3");
+        assert_eq!(ty, Some(ElementType::F32));
+    }
+
+    #[test]
+    fn test_default_scientific_is_float() {
+        assert_eq!(default_number_elem("1e-15"), ElementType::F32);
+        // 3.4e39 overflows f32 but fits f64
+        assert_eq!(default_number_elem("3.4e39"), ElementType::F64);
     }
 
     #[test]

@@ -1303,7 +1303,7 @@ impl ElementType {
     /// with a fractional part -- those are type errors reported elsewhere, and answering
     /// "out of range" for them would name the wrong defect).
     pub fn accepts_integer_literal(&self, text: &str) -> Option<bool> {
-        if text.contains('.') {
+        if is_float_literal_spelling(text) {
             return None;
         }
         if *self == ElementType::USize {
@@ -1371,6 +1371,12 @@ impl std::fmt::Display for ElementType {
             ElementType::Generic(g) => write!(f, "{}", g),
         }
     }
+}
+
+/// Whether a numeric spelling denotes a float: a decimal point, or a scientific exponent
+/// (`1e-15` has no `.` but is still a float).
+pub fn is_float_literal_spelling(s: &str) -> bool {
+    s.contains('.') || s.contains('e') || s.contains('E')
 }
 
 impl std::str::FromStr for ElementType {

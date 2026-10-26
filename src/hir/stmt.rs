@@ -2021,7 +2021,7 @@ impl<'a> TypeChecker<'a> {
                 // point is an integer everywhere else in the language.
                 let is_float = match ty {
                     Some(t) => t.is_float(),
-                    None => n_str.contains('.') || n_str.contains('e') || n_str.contains('E'),
+                    None => crate::parser::expr::is_float_literal_spelling(n_str),
                 };
                 // An integer too big for an i64 has no value. Read as a float it would lose its
                 // low digits: `u64::MAX` was worked out as 18446744073709551616.

@@ -3961,7 +3961,7 @@ impl<'c> LowerToMelior<'c> for NumberExpr {
         let ty = if let Some(ast_ty) = ast_ty_opt {
             gen.lower_type(&syntax::Type::Scalar(ast_ty.clone()))
                 .unwrap()
-        } else if val_str.contains('.') {
+        } else if crate::parser::expr::is_float_literal_spelling(val_str) {
             gen.f32_ty
         } else {
             gen.i32_ty

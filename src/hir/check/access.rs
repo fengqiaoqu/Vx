@@ -118,7 +118,7 @@ impl<'a> TypeChecker<'a> {
             _ => None,
         };
         if let Some((negative, n)) = literal {
-            let float_literal = n.value.contains('.');
+            let float_literal = crate::parser::expr::is_float_literal_spelling(&n.value);
             if (n.ty.is_some() && n.ty.as_ref() != Some(&elem)) || (float_literal && !is_float) {
                 return report(self, "has a value whose type differs from the declared one");
             }

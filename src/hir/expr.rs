@@ -33,7 +33,7 @@ pub(crate) fn expected_numeric_elem(expected: &Type, value: &str) -> Option<Elem
     if matches!(el, ElementType::Bool | ElementType::Generic(_)) {
         return None;
     }
-    let is_float_lit = value.contains('.');
+    let is_float_lit = crate::parser::expr::is_float_literal_spelling(value);
     (el.is_float() == is_float_lit).then(|| el.clone())
 }
 

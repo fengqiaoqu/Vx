@@ -1988,9 +1988,7 @@ impl<'graph, 'bodies> ComptimeInterpreter<'graph, 'bodies> {
     fn number_literal(number: &NumberExpr) -> Option<Value> {
         let is_float = number.ty.as_ref().is_some_and(ElementType::is_float)
             || (number.ty.is_none()
-                && (number.value.contains('.')
-                    || number.value.contains('e')
-                    || number.value.contains('E')));
+                && crate::parser::expr::is_float_literal_spelling(&number.value));
         if is_float {
             let value = number.value.parse::<f64>().ok()?;
             Self::round_float(value, number.ty.as_ref()).map(Value::Number)
