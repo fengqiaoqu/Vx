@@ -107,9 +107,7 @@ fn mlir_float_literal(value: f64, elem: &ElementType) -> String {
             }
             ElementType::F32 => format!("0x{:08X}", (value as f32).to_bits()),
             ElementType::F64 => format!("0x{:016X}", value.to_bits()),
-            other => panic!(
-                "mlir_float_literal: non-finite float for unexpected type {other:?}"
-            ),
+            other => panic!("mlir_float_literal: non-finite float for unexpected type {other:?}"),
         };
     }
     let text = format!("{value:?}");
@@ -4052,7 +4050,10 @@ mod tests {
     #[test]
     fn float_literals_keep_a_decimal_point_before_the_exponent() {
         // The exact case that broke `struct_codegen.vx`.
-        assert_eq!(super::mlir_float_literal(1e-5, &crate::syntax::ElementType::F64), "1.0e-5");
+        assert_eq!(
+            super::mlir_float_literal(1e-5, &crate::syntax::ElementType::F64),
+            "1.0e-5"
+        );
 
         // The property, over a spread of magnitudes: whatever Rust chooses to print, the
         // mantissa always carries a point.
@@ -4093,7 +4094,10 @@ mod tests {
         assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, &F16), "0xFC00");
         assert_eq!(super::mlir_float_literal(f64::NAN, &F16), "0x7E00");
         assert_eq!(super::mlir_float_literal(f64::INFINITY, &BF16), "0x7F80");
-        assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, &BF16), "0xFF80");
+        assert_eq!(
+            super::mlir_float_literal(f64::NEG_INFINITY, &BF16),
+            "0xFF80"
+        );
         assert_eq!(super::mlir_float_literal(f64::NAN, &BF16), "0x7FC0");
     }
 }
