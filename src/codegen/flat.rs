@@ -90,21 +90,26 @@ impl std::error::Error for ModuleEmitError {}
 /// and MLIR needs a decimal point before the exponent (Vx#384). A non-finite value is written
 /// as its bit pattern in hex at `bits` width — MLIR does not accept `inf` / `-inf` / `NaN`
 /// as float attribute text (Vx#2081).
-fn mlir_float_literal(value: f64, bits: u32) -> String {
+fn mlir_float_literal(value: f64, elem: &ElementType) -> String {
     if !value.is_finite() {
-        return match bits {
-            16 => {
-                // f16 / bf16: write 16-bit hex. Inf/NaN use IEEE half encoding; comptime
-                // refuses f16 today, so this arm is defensive.
+        // Bit patterns differ by type. f16 and bf16 are both 16 bits, but infinity and NaN
+        // use different encodings, so the element type is required (not only the width).
+        return match elem {
+            ElementType::F16 => {
                 let sign = ((value.to_bits() >> 63) as u16) << 15;
                 let mag = if value.is_nan() { 0x7E00u16 } else { 0x7C00u16 };
                 format!("0x{:04X}", sign | mag)
             }
-            32 => format!("0x{:08X}", (value as f32).to_bits()),
-            64 => format!("0x{:016X}", value.to_bits()),
-            other => {
-                panic!("mlir_float_literal: non-finite float with unexpected bit width {other}")
+            ElementType::BF16 => {
+                let sign = ((value.to_bits() >> 63) as u16) << 15;
+                let mag = if value.is_nan() { 0x7FC0u16 } else { 0x7F80u16 };
+                format!("0x{:04X}", sign | mag)
             }
+            ElementType::F32 => format!("0x{:08X}", (value as f32).to_bits()),
+            ElementType::F64 => format!("0x{:016X}", value.to_bits()),
+            other => panic!(
+                "mlir_float_literal: non-finite float for unexpected type {other:?}"
+            ),
         };
     }
     let text = format!("{value:?}");
@@ -4047,12 +4052,12 @@ mod tests {
     #[test]
     fn float_literals_keep_a_decimal_point_before_the_exponent() {
         // The exact case that broke `struct_codegen.vx`.
-        assert_eq!(super::mlir_float_literal(1e-5, 64), "1.0e-5");
+        assert_eq!(super::mlir_float_literal(1e-5, &crate::syntax::ElementType::F64), "1.0e-5");
 
         // The property, over a spread of magnitudes: whatever Rust chooses to print, the
         // mantissa always carries a point.
         for value in [1e-5, 1e-7, 2.5e-9, 288.0, 0.5, -0.25, 1.0, 3.4e38] {
-            let text = super::mlir_float_literal(value, 64);
+            let text = super::mlir_float_literal(value, &crate::syntax::ElementType::F64);
             let mantissa = text.split(['e', 'E']).next().unwrap();
             assert!(
                 mantissa.contains('.'),
@@ -4065,26 +4070,30 @@ mod tests {
     /// be the bit pattern in hex, at the width of the type (Vx#2081).
     #[test]
     fn float_literals_write_non_finite_as_hex_bits() {
+        use crate::syntax::ElementType::{BF16, F16, F32, F64};
         assert_eq!(
-            super::mlir_float_literal(f64::INFINITY, 64),
+            super::mlir_float_literal(f64::INFINITY, &F64),
             "0x7FF0000000000000"
         );
         assert_eq!(
-            super::mlir_float_literal(f64::NEG_INFINITY, 64),
+            super::mlir_float_literal(f64::NEG_INFINITY, &F64),
             "0xFFF0000000000000"
         );
         assert_eq!(
-            super::mlir_float_literal(f64::NAN, 64),
+            super::mlir_float_literal(f64::NAN, &F64),
             "0x7FF8000000000000"
         );
-        assert_eq!(super::mlir_float_literal(f64::INFINITY, 32), "0x7F800000");
+        assert_eq!(super::mlir_float_literal(f64::INFINITY, &F32), "0x7F800000");
         assert_eq!(
-            super::mlir_float_literal(f64::NEG_INFINITY, 32),
+            super::mlir_float_literal(f64::NEG_INFINITY, &F32),
             "0xFF800000"
         );
-        assert_eq!(super::mlir_float_literal(f64::NAN, 32), "0x7FC00000");
-        assert_eq!(super::mlir_float_literal(f64::INFINITY, 16), "0x7C00");
-        assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, 16), "0xFC00");
-        assert_eq!(super::mlir_float_literal(f64::NAN, 16), "0x7E00");
+        assert_eq!(super::mlir_float_literal(f64::NAN, &F32), "0x7FC00000");
+        assert_eq!(super::mlir_float_literal(f64::INFINITY, &F16), "0x7C00");
+        assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, &F16), "0xFC00");
+        assert_eq!(super::mlir_float_literal(f64::NAN, &F16), "0x7E00");
+        assert_eq!(super::mlir_float_literal(f64::INFINITY, &BF16), "0x7F80");
+        assert_eq!(super::mlir_float_literal(f64::NEG_INFINITY, &BF16), "0xFF80");
+        assert_eq!(super::mlir_float_literal(f64::NAN, &BF16), "0x7FC0");
     }
 }
