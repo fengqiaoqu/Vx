@@ -105,31 +105,50 @@ impl<'a> TypeChecker<'a> {
             elem,
             ElementType::F16 | ElementType::BF16 | ElementType::F32 | ElementType::F64
         );
-        if let Expr::Number(n) = &decl.expr {
+        // A bare literal, or a unary minus on a literal (`-129`), is returned as written.
+        // Without a range check here, a value that does not fit crashed later in the flat
+        // emitter instead of getting one E3044 at the declaration. `-129` is a negation of
+        // `129`, not an `Expr::Number`, so both forms are checked.
+        let literal = match &decl.expr {
+            Expr::Number(n) => Some((false, n)),
+            Expr::UnaryOp(u) if u.op == UnaryOp::Neg => match &*u.expr {
+                Expr::Number(n) => Some((true, n)),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some((negative, n)) = literal {
             let float_literal = n.value.contains('.');
             if (n.ty.is_some() && n.ty.as_ref() != Some(&elem)) || (float_literal && !is_float) {
                 return report(self, "has a value whose type differs from the declared one");
             }
-            // A bare integer literal was returned as written, with no range check. A value
-            // that does not fit (for example `const D : u8 = 300`) then crashed later in the
-            // flat emitter instead of getting one E3044 at the declaration.
             if !float_literal && !is_float {
                 if let Some((min, max)) =
                     crate::hir::comptime_interpreter::ComptimeInterpreter::integer_range(&elem)
                 {
                     match n.value.parse::<i128>() {
-                        Ok(v) if v < min || v > max => {
-                            return report(self, "has a value that does not fit its declared type");
+                        Ok(v) => {
+                            let v = if negative { -v } else { v };
+                            if v < min || v > max {
+                                return report(
+                                    self,
+                                    "has a value that does not fit its declared type",
+                                );
+                            }
                         }
                         Err(_) => {
                             return report(self, "has a value that does not fit its declared type");
                         }
-                        Ok(_) => {}
                     }
                 }
             }
+            let value = if negative {
+                format!("-{}", n.value).into()
+            } else {
+                n.value.clone()
+            };
             return Some(Expr::Number(NumberExpr {
-                value: n.value.clone(),
+                value,
                 ty: Some(elem),
                 span: *span,
             }));
